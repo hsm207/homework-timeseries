@@ -47,11 +47,17 @@ test.df <- train.df %>%
 
 summary(test.df)
 ```
+Set the size of the valivation set:
+```{r validation size}
+valid.size <- 150
+```
+
+
 Crate the validation set:
 ```{r}
 valid.df <- train.df %>%
   dplyr::setdiff(test.df) %>%
-  tail(150)
+  tail(valid.size)
 
 summary(valid.df)  
 ```
@@ -144,17 +150,19 @@ astsa::lag1.plot(consol.ts[,"sales"], 21)
 Prepare the data set:
 ```{r}
 alldata <-
-  ts.intersect(consol.ts, 
-               saleslag7 = lag(consol.ts[, "sales"], -7),
-               saleslag14 = lag(consol.ts[, "sales"], -14))
-
-dimnames(alldata)[[2]] <- dimnames(alldata)[[2]] %>%
+  ts.intersect(
+  consol.ts,
+  saleslag7 = lag(consol.ts[, "sales"],-7),
+  saleslag14 = lag(consol.ts[, "sales"],-14)
+  )
+  
+  dimnames(alldata)[[2]] <- dimnames(alldata)[[2]] %>%
   stringr::str_replace("consol.ts.(.*)", "\\1")
-
-n <- nrow(alldata)
-
-alldata.train <- ts(alldata[1:(n-150), ])
-alldata.valid <- ts(alldata[(n-150+1):n, ])
+  
+  n <- nrow(alldata)
+  
+  alldata.train <- ts(alldata[1:(n - valid.size),])
+  alldata.valid <- ts(alldata[(n - valid.size + 1):n,])
 ```
 
 Build the model:
