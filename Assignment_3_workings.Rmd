@@ -40,6 +40,31 @@ train.df %<>%
   dplyr::mutate(sales = as.numeric(sales))
 summary(train.df)
 ```
+# Feature engineering
+## Month
+Add a month column (caret's `dummyVars` is broken):
+```{r add month cols}
+tmp.df <- train.df %>%
+  dplyr::mutate(month = as.factor(lubridate::month(date, label = T))) %>%
+  dplyr::select(month)
+
+months <- levels(tmp.df$month)
+
+dummy.months <- purrr::map(months, function(m) {
+  as.numeric(tmp.df == m)
+}) %>%
+  purrr::invoke(cbind, .) %>%
+  as.data.frame() %>%
+  magrittr::set_colnames(paste0("is", months))
+
+train.df %<>%
+  dplyr::bind_cols(dummy.months) %>%
+  dplyr::select(-isNov, -isDec)
+
+```
+
+
+# Partitions
 Create the test set:
 ```{r}
 test.df <- train.df %>%
