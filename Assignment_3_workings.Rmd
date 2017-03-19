@@ -1,0 +1,230 @@
+---
+title: "OPIM 5671 Assignment 3 Workings"
+output: 
+  html_notebook:
+    toc: TRUE
+    toc_float: TRUE
+---
+# Import libraries
+```{r}
+library(magrittr)
+```
+
+# Import data
+```{r}
+library(readr)
+train.df <-
+read_csv(
+"./Data/train.csv",
+col_types = cols(
+chris = col_logical(),
+customers = col_double(),
+date = col_character(),
+easter = col_logical(),
+open = col_logical(),
+ph = col_logical(),
+prom = col_logical(),
+sch = col_logical()
+)
+)
+summary(train.df)
+```
+Fix the date column:
+```{r}
+train.df %<>%
+  dplyr::mutate(date = lubridate::ymd(date))
+```
+Fix the sales column:
+```{r}
+train.df %<>%
+  dplyr::mutate(sales = as.numeric(sales))
+summary(train.df)
+```
+Create the test set:
+```{r}
+test.df <- train.df %>%
+  dplyr::slice(which(is.na(sales)))
+
+summary(test.df)
+```
+Crate the validation set:
+```{r}
+valid.df <- train.df %>%
+  dplyr::setdiff(test.df) %>%
+  tail(150)
+
+summary(valid.df)  
+```
+Fix the test training set:
+```{r}
+train.df %<>%
+  dplyr::setdiff(valid.df) %>%
+  dplyr::setdiff(test.df)
+
+summary(train.df)
+```
+# Visualizations
+## Data Preparation
+Consolidate the training and validation set:
+```{r}
+consol.df <- train.df %>%
+  dplyr::bind_rows(valid.df)
+
+summary(consol.df)
+```
+Convert the consolidated data frame into a time series object:
+```{r }
+consol.ts <-
+  purrr::map(consol.df[, -1], function(x)
+  ts(zoo::zoo(x, order.by = consol.df$date))) %>%
+  purrr::invoke(ts.intersect, .)
+  
+summary(consol.ts)
+  
+```
+## Trend/Seasonality
+Plot sales:
+```{r}
+plot(x = consol.df$date, y = consol.ts[, "sales"], type = "b")
+```
+
+Sales by month:
+```{r}
+consol.df %>%
+  dplyr::mutate(month = lubridate::month(date, T),
+                year = lubridate::year(date)) %>%
+  dplyr::group_by(month, year) %>%
+  dplyr::summarise(avg.sales = mean(sales)) %>%
+  tidyr::spread(year, avg.sales)
+```
+
+
+## Cross Correlation Function
+Plot the ccf of sales against all the other variables:
+```{r}
+TSA::prewhiten(consol.ts[, "sales"], consol.ts[, "customers"])
+```
+
+
+```{r}
+TSA::prewhiten(consol.ts[, "sales"], consol.ts[, "open"])
+```
+
+
+
+```{r}
+TSA::prewhiten(consol.ts[, "sales"], consol.ts[, "prom"])
+``` 
+
+
+```{r}
+TSA::prewhiten(consol.ts[, "sales"], consol.ts[, "sch"])
+```
+
+```{r}
+TSA::prewhiten(consol.ts[, "sales"], consol.ts[, "chris"])
+```
+```{r}
+TSA::prewhiten(consol.ts[, "sales"], consol.ts[, "easter"])
+```
+
+```{r}
+TSA::prewhiten(consol.ts[, "sales"], consol.ts[, "ph"])
+```
+## Lagged plots
+
+Plot of sales at various lags:
+```{r}
+astsa::lag1.plot(consol.ts[,"sales"], 21)
+```
+
+
+# Modelling
+## Lagged regression
+Prepare the data set:
+```{r}
+alldata <-
+  ts.intersect(consol.ts, 
+               saleslag7 = lag(consol.ts[, "sales"], -7),
+               saleslag14 = lag(consol.ts[, "sales"], -14))
+
+dimnames(alldata)[[2]] <- dimnames(alldata)[[2]] %>%
+  stringr::str_replace("consol.ts.(.*)", "\\1")
+
+n <- nrow(alldata)
+
+alldata.train <- ts(alldata[1:(n-150), ])
+alldata.valid <- ts(alldata[(n-150+1):n, ])
+```
+
+Build the model:
+```{r}
+fit <- lm(log(sales) ~ ., data = alldata.train)
+summary(fit)
+
+```
+View the residuals:
+```{r}
+astsa::acf2(residuals(fit))
+```
+```{r}
+plot(fit)
+```
+Make predictions on the validation set:
+```{r}
+preds <- predict(fit, alldata.valid) %>%
+  exp
+  
+tgt.cols <- c("date", "sales", "pred.sales", "err.squared")
+
+rest.cols <- setdiff(names(valid.df), tgt.cols)
+
+preds.df <- data.frame(valid.df) %>%
+  dplyr::mutate(pred.sales = preds) %>%
+  dplyr::mutate(err.squared = (sales - pred.sales) ^ 2) %>%
+  dplyr::select(date, sales, pred.sales, err.squared,  match(rest.cols, names(valid.df))) %>%
+  dplyr::rename(actual.sales = sales)
+
+
+```
+Compute the RMSE:
+```{r}
+preds.df %>%
+  dplyr::select(err.squared) %>%
+  {sqrt(sum(.)/n)}
+
+```
+
+# Feature Enginering
+
+Add log of customers:
+```{r}
+train.df %>%
+  dplyr::mutate(log_customers = log(customers)) ->
+  train.df
+```
+Add month variable:
+```{r}
+train.df %>%
+  dplyr::mutate(month = lubridate::month(date)) ->
+  train.df
+```
+Convert TRUE/FALSE to 0/1:
+```{r}
+train.df %>%
+  dplyr::mutate(
+                open = as.numeric(open),
+                prom = as.numeric(prom),
+                sch = as.numeric(sch),
+                chris = as.numeric(chris),
+                easter = as.numeric(easter),
+                ph = as.numeric(ph)) ->
+  train.df
+```
+
+
+Save file:
+```{r}
+write.csv(train.df, "./Data/train_mod.csv", row.names = F)
+```
+
