@@ -177,8 +177,14 @@ Prepare the data set:
 alldata <-
   ts.intersect(
   consol.ts,
-  saleslag7 = lag(consol.ts[, "sales"],-7),
-  saleslag14 = lag(consol.ts[, "sales"],-14)
+  saleslag7 = lag(consol.ts[, "sales"], -7),
+  saleslag14 = lag(consol.ts[, "sales"], -14),
+  saleslag1 = lag(consol.ts[, "open"],-4),
+  openlag2 = lag(consol.ts[, "open"], -2),
+  openlag5 = lag(consol.ts[, "open"], -5),
+  promlag1 = lag(consol.ts[, "prom"], -1),
+  schlag1 = lag(consol.ts[, "sch"], -1),
+  easterlag1 = lag(consol.ts[, "easter"], -2)
   )
   
   dimnames(alldata)[[2]] <- dimnames(alldata)[[2]] %>%
