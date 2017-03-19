@@ -40,6 +40,31 @@ train.df %<>%
   dplyr::mutate(sales = as.numeric(sales))
 summary(train.df)
 ```
+# Feature engineering
+## Month
+Add a month column (caret's `dummyVars` is broken):
+```{r add month cols}
+tmp.df <- train.df %>%
+  dplyr::mutate(month = as.factor(lubridate::month(date, label = T))) %>%
+  dplyr::select(month)
+
+months <- levels(tmp.df$month)
+
+dummy.months <- purrr::map(months, function(m) {
+  as.numeric(tmp.df == m)
+}) %>%
+  purrr::invoke(cbind, .) %>%
+  as.data.frame() %>%
+  magrittr::set_colnames(paste0("is", months))
+
+train.df %<>%
+  dplyr::bind_cols(dummy.months) %>%
+  dplyr::select(-isNov, -isDec)
+
+```
+
+
+# Partitions
 Create the test set:
 ```{r}
 test.df <- train.df %>%
@@ -152,8 +177,14 @@ Prepare the data set:
 alldata <-
   ts.intersect(
   consol.ts,
-  saleslag7 = lag(consol.ts[, "sales"],-7),
-  saleslag14 = lag(consol.ts[, "sales"],-14)
+  saleslag7 = lag(consol.ts[, "sales"], -7),
+  saleslag14 = lag(consol.ts[, "sales"], -14),
+  saleslag1 = lag(consol.ts[, "open"],-4),
+  openlag2 = lag(consol.ts[, "open"], -2),
+  openlag5 = lag(consol.ts[, "open"], -5),
+  promlag1 = lag(consol.ts[, "prom"], -1),
+  schlag1 = lag(consol.ts[, "sch"], -1),
+  easterlag1 = lag(consol.ts[, "easter"], -2)
   )
   
   dimnames(alldata)[[2]] <- dimnames(alldata)[[2]] %>%
@@ -202,21 +233,21 @@ preds.df %>%
   {sqrt(sum(.)/n)}
 
 ```
-
-# Feature Enginering
-
-Add log of customers:
+If we manually update the predictions so that sales is 0 whenever the shop is closed...
 ```{r}
-train.df %>%
-  dplyr::mutate(log_customers = log(customers)) ->
-  train.df
+preds.df %>%
+  dplyr::mutate(pred.sales = dplyr::if_else(open == F, 0, pred.sales)) %>%
+  dplyr::mutate(err.squared = (actual.sales - pred.sales) ^ 2) %>%
+  dplyr::select(err.squared) %>%
+  {
+  sqrt(sum(.) / n)
+  }
 ```
-Add month variable:
-```{r}
-train.df %>%
-  dplyr::mutate(month = lubridate::month(date)) ->
-  train.df
-```
+
+
+# Input to SAS script
+
+
 Convert TRUE/FALSE to 0/1:
 ```{r}
 train.df %>%
