@@ -233,21 +233,21 @@ preds.df %>%
   {sqrt(sum(.)/n)}
 
 ```
-
-# Feature Enginering
-
-Add log of customers:
+If we manually update the predictions so that sales is 0 whenever the shop is closed...
 ```{r}
-train.df %>%
-  dplyr::mutate(log_customers = log(customers)) ->
-  train.df
+preds.df %>%
+  dplyr::mutate(pred.sales = dplyr::if_else(open == F, 0, pred.sales)) %>%
+  dplyr::mutate(err.squared = (actual.sales - pred.sales) ^ 2) %>%
+  dplyr::select(err.squared) %>%
+  {
+  sqrt(sum(.) / n)
+  }
 ```
-Add month variable:
-```{r}
-train.df %>%
-  dplyr::mutate(month = lubridate::month(date)) ->
-  train.df
-```
+
+
+# Input to SAS script
+
+
 Convert TRUE/FALSE to 0/1:
 ```{r}
 train.df %>%
