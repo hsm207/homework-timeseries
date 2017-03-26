@@ -1,9 +1,11 @@
 ---
 title: "OPIM 5671 Assignment 3 Workings"
-output: 
+output:
+  github_document:
+    toc: yes
   html_notebook:
-    toc: TRUE
-    toc_float: TRUE
+    toc: yes
+    toc_float: yes
 ---
 # Import libraries
 ```{r}
@@ -14,19 +16,19 @@ library(magrittr)
 ```{r}
 library(readr)
 train.df <-
-read_csv(
-"./Data/train.csv",
-col_types = cols(
-chris = col_logical(),
-customers = col_double(),
-date = col_character(),
-easter = col_logical(),
-open = col_logical(),
-ph = col_logical(),
-prom = col_logical(),
-sch = col_logical()
-)
-)
+  read_csv(
+    "./Data/train.csv",
+    col_types = cols(
+      chris = col_logical(),
+      customers = col_double(),
+      date = col_character(),
+      easter = col_logical(),
+      open = col_logical(),
+      ph = col_logical(),
+      prom = col_logical(),
+      sch = col_logical()
+    )
+  )
 summary(train.df)
 ```
 Fix the date column:
