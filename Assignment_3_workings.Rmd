@@ -1,9 +1,11 @@
 ---
 title: "OPIM 5671 Assignment 3 Workings"
-output: 
+output:
+  github_document:
+    toc: yes
   html_notebook:
-    toc: TRUE
-    toc_float: TRUE
+    toc: yes
+    toc_float: yes
 ---
 # Import libraries
 ```{r}
@@ -14,19 +16,19 @@ library(magrittr)
 ```{r}
 library(readr)
 train.df <-
-read_csv(
-"./Data/train.csv",
-col_types = cols(
-chris = col_logical(),
-customers = col_double(),
-date = col_character(),
-easter = col_logical(),
-open = col_logical(),
-ph = col_logical(),
-prom = col_logical(),
-sch = col_logical()
-)
-)
+  read_csv(
+    "./Data/train.csv",
+    col_types = cols(
+      chris = col_logical(),
+      customers = col_double(),
+      date = col_character(),
+      easter = col_logical(),
+      open = col_logical(),
+      ph = col_logical(),
+      prom = col_logical(),
+      sch = col_logical()
+    )
+  )
 summary(train.df)
 ```
 Fix the date column:
@@ -243,7 +245,79 @@ preds.df %>%
   sqrt(sum(.) / n)
   }
 ```
+## Modelling the residuals
+```{r}
+arima.fit <- arima(log(alldata.train[, "sales"]),
+                   xreg = alldata.train[, -1],
+                   order = c(1, 1, 1),
+                   seasonal = list(order = c(0, 0, 1), period = 7))
 
+preds <- predict(arima.fit, newxreg = alldata.valid[, -1])
+
+
+arima.pred.df <- data.frame(valid.df) %>%
+  dplyr::mutate(pred.sales = exp(preds$pred)) %>%
+  dplyr::mutate(err.squared = (sales - pred.sales) ^ 2) %>%
+  dplyr::select(date, sales, pred.sales, err.squared,  match(rest.cols, names(valid.df))) %>%
+  dplyr::rename(actual.sales = sales)
+```
+
+```{r}
+astsa::acf2(arima.fit$residuals)
+```
+
+```{r}
+arima.pred.df %>%
+  dplyr::select(err.squared) %>%
+  {sqrt(sum(.)/n)}
+```
+
+Retrain model on training and validationset and predict on test set:
+```{r model_2}
+consol.df <- train.df %>%
+  dplyr::bind_rows(valid.df) %>%
+  dplyr::bind_rows(test.df)
+
+consol.ts <-
+  purrr::map(consol.df[,-1], function(x)
+  ts(zoo::zoo(x, order.by = consol.df$date))) %>%
+  purrr::invoke(ts.intersect, .)
+
+alldata <-
+  ts.intersect(
+  consol.ts,
+  saleslag7 = lag(consol.ts[, "sales"],-7),
+  saleslag14 = lag(consol.ts[, "sales"],-14),
+  saleslag1 = lag(consol.ts[, "open"], -4),
+  openlag2 = lag(consol.ts[, "open"],-2),
+  openlag5 = lag(consol.ts[, "open"],-5),
+  promlag1 = lag(consol.ts[, "prom"],-1),
+  schlag1 = lag(consol.ts[, "sch"],-1),
+  easterlag1 = lag(consol.ts[, "easter"],-2)
+  )
+  
+dimnames(alldata)[[2]] <- dimnames(alldata)[[2]] %>%
+  stringr::str_replace("consol.ts.(.*)", "\\1")
+  
+n <- nrow(alldata)
+  
+alldata.train <- ts(alldata[1:(n - 150),])
+alldata.test <- ts(alldata[(n - 150 + 1):n,])
+  
+model2.fit <- arima(
+  log(alldata.train[, "sales"]),
+  xreg = alldata.train[, -1],
+  order = c(1, 1, 1),
+  seasonal = list(order = c(0, 0, 1), period = 7)
+  )
+  
+preds <- predict(model2.fit, newxreg = alldata.test[, -1])$pred %>%
+  exp
+
+summary(preds)
+```
+
+Abandon this method because `predict` does not work with lagged predictors ¯\_(ツ)_/¯ .
 
 # Input to SAS script
 
